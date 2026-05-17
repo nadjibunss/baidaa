@@ -3,17 +3,18 @@ from bs4 import BeautifulSoup
 import time
 import os
 import json
+from flask import Flask
 
-# Ambil akun dari Env Vercel
+app = Flask(__name__)
+
+# Ambil akun dari Env
 MG_USER = os.getenv("MG_USER")
 MG_PASS = os.getenv("MG_PASS")
 
-# URL
 LOGIN_URL = "https://komentar.mgkomik.cc/login.php"
 BASE = "https://web.mgkomik.cc"
 WIDGET_URL = "https://komentar.mgkomik.cc/1widget.php"
 
-# Session simpan cookie login
 ses = requests.Session()
 
 def delay(ms):
@@ -24,7 +25,6 @@ def log(msg):
     now = datetime.now().strftime("%H:%M:%S")
     print(f"[MGKomik {now}] {msg}")
 
-# Simpan sementara seperti GM_setValue
 storage = {
     "next_page_url": "",
     "komik_queue": "[]",
@@ -39,7 +39,6 @@ def set_val(key, val):
 def get_val(key):
     return storage.get(key, "")
 
-# Login Akun
 def do_login():
     log("🔐 Login ke komentar.mgkomik.cc")
     payload = {
@@ -59,7 +58,6 @@ def do_login():
         log(f"❌ Error Login: {e}")
         return False
 
-# Upvote di widget iframe
 def do_upvote():
     log("🖱️ Melakukan Upvote...")
     try:
@@ -69,18 +67,14 @@ def do_upvote():
         if not btn:
             log("⏭️ Tombol upvote tidak ditemukan")
             return
-        # Cek sudah di vote
         sudah = any(cls in btn.get("class", []) for cls in ["active","reacted","selected"])
         if sudah:
             log("⏭️ Sudah di upvote, skip")
             return
-        # Simulasi klik upvote
-        onclick = btn.get("onclick", "")
         log("✅ Berhasil Upvote")
     except Exception as e:
         log(f"❌ Error Upvote: {e}")
 
-# Ambil daftar komik di /komik/
 def scrape_komik_list():
     log("📚 Mengambil daftar komik")
     url = f"{BASE}/komik/"
@@ -95,22 +89,19 @@ def scrape_komik_list():
     links = list(set(links))
     log(f"📚 Ditemukan {len(links)} komik")
 
-    # Next page
-    next_page = None
+    next_page = ""
     for a in soup.select(".pagination a"):
         if "next" in a.text.lower() or "page=" in a.get("href",""):
             next_page = a["href"]
             break
 
-    set_val("next_page_url", next_page if next_page else "")
+    set_val("next_page_url", next_page)
     set_val("komik_queue", json.dumps(links))
     set_val("komik_index", "0")
     set_val("ep_queue", "[]")
     set_val("ep_index", "0")
-
     return links
 
-# Ambil daftar episode
 def scrape_episode_list(komik_url):
     log(f"📖 Buka detail komik: {komik_url}")
     res = ses.get(komik_url, timeout=15)
@@ -129,7 +120,6 @@ def scrape_episode_list(komik_url):
     set_val("ep_index", "0")
     return eps
 
-# Next Komik logic
 def next_komik():
     queue = json.loads(get_val("komik_queue"))
     idx = int(get_val("komik_index")) + 1
@@ -149,13 +139,11 @@ def next_komik():
         else:
             log("🎉 SEMUA KOMIK & EPISODE SELESAI DI VOTE!")
 
-# Jalan tiap episode
 def run_episode(komik_url):
     eps = scrape_episode_list(komik_url)
     if not eps:
         next_komik()
         return
-
     for ep_url in eps:
         log(f"➡️ Buka episode: {ep_url}")
         ses.get(ep_url, timeout=15)
@@ -164,7 +152,6 @@ def run_episode(komik_url):
         delay(1000)
     next_komik()
 
-# Main Bot
 def main_bot():
     if not do_login():
         return
@@ -173,6 +160,11 @@ def main_bot():
     if komik_list:
         run_episode(komik_list[0])
 
-if __name__ == "__main__":
+# Handler WAJIB untuk Vercel
+@app.route('/')
+def handler():
     main_bot()
-  
+    return "Bot MGKomik Berjalan, cek log Vercel!"
+
+if __name__ == "__main__":
+    app.run()
