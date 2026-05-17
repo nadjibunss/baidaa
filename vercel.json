@@ -1,12 +1,15 @@
 {
+  "version": 2,
   "builds": [
     {
-      "src": "index.py",
+      "src": "api/index.py",
       "use": "@vercel/python"
     }
   ],
-  "env": {
-    "MG_USER": "",
-    "MG_PASS": ""
-  }
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "api/index.py"
+    }
+  ]
 }
